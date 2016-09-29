@@ -21,7 +21,7 @@ Usage: $PROGNAME [action]
              
              move       : Checks if there are manually moved resources
 
-	     offline    : Checks if there are Offline nodes
+             offline    : Checks if there are Offline nodes
              
              failed     : Checks if there are failed actions
              
