@@ -16,6 +16,8 @@ Usage: $PROGNAME [action]
     Actions:
              
              maintenance: Checks if maintenance property is set to true
+
+             standby    : Checks if one more more nodes are on Standby
              
              move       : Checks if there are manually moved resources
              
