@@ -1,19 +1,32 @@
 #!/bin/bash
+# 
+# This script is based on
+# https://github.com/conceptsandtraining/nagios_pacemaker
+# License: GPLv2
+# Author: CaT Concepts and Training GmbH <github@concepts-and-training.de>
+# Author: Luc de Louw <ldelouw@redhat.com>
+# Changes:
+#  - Rewrite to use pcs instead of crm to get the script working with RHEL7 and
+#    pcs since RHEL lacks the crm shell
+# 
 
-CRM="sudo /usr/sbin/crm"
+PCS="sudo /usr/sbin/pcs"
 GREP="/bin/grep"
 
 PROGNAME=`/usr/bin/basename $0`
 PROGPATH=`echo $0 | sed -e 's,[\\/][^\\/][^\\/]*$,,'`
 REVISION="0.1"
 
-. $PROGPATH/utils.sh
+#. $PROGPATH/utils.sh
+. /usr/lib64/nagios/plugins/utils.sh
 
 print_usage() {
     echo "Usage  : $PROGNAME [action]"
     echo "Actions:"
     echo "         maintenance: Checks if maintenance property is set to true"
+    echo "         standby    : Checks if one or more nodes are in Standby"
     echo "         move       : Checks if there are manually moved resources"
+    echo "         offline    : Checks if there are Offline nodes"
     echo "         failed     : Checks if there are failed actions"
     echo "         inactive   : Checks if there are inactive resources"
     echo ""
@@ -32,17 +45,27 @@ print_help() {
 }
 
 check_maintenance() {
-    if $CRM configure show | $GREP 'maintenance-mode="true"' > /dev/null; then
-	echo "WARNING: Maintenance Mode is active..."
+    if $PCS config show | $GREP 'maintenance-mode: true' > /dev/null; then
+	echo "WARNING: Maintenance Mode is true"
 	exit $STATE_WARNING
     else
-	echo "OK: Maintenance Mode is inactive..."
+	echo "OK: Maintenance Mode is false"
+	exit $STATE_OK
+    fi
+}
+
+check_standby() {
+    if $PCS config show | $GREP 'standby=on' > /dev/null; then
+	echo "WARNING: Standby on a node is on" 
+	exit $STATE_WARNING
+    else
+	echo "OK: No Node in Standby"
 	exit $STATE_OK
     fi
 }
 
 check_move() {
-    if $CRM configure show | $GREP 'location cli-prefer' > /dev/null; then
+    if $PCS config show | $GREP 'cli-ban' > /dev/null; then
 	echo "WARNING: Manual move is active..."
 	exit $STATE_WARNING
     else
@@ -51,8 +74,18 @@ check_move() {
     fi
 }
 
+check_offline() {
+    if $PCS status | $GREP OFFLINE > /dev/null; then
+	echo "WARNING: One of more Nodes are Offline (stopped)"
+	exit $STATE_WARNING
+    else
+	echo "OK: All Nodes are Online"
+	exit $STATE_OK
+    fi
+}
+
 check_failed() {
-    if $CRM status | awk '/Failed actions/ {seen = 1} seen {print}' | $GREP -v 'Failed actions:' > /dev/null; then
+    if $PCS status | awk '/Failed Actions/ {seen = 1} seen {print}' | $GREP -v 'Failed Actions:' > /dev/null; then
 	echo "WARNING: Failed actions present..."
 	exit $STATE_WARNING
     else
@@ -63,7 +96,7 @@ check_failed() {
 
 
 check_inactive() {
-    if ! diff -B <($CRM status | tail -n+11) <($CRM status inactive | grep -v "Full list of resources:" | tail -n+11) > /dev/null; then
+    if $PCS status | $GREP "Stopped\|FAILED" > /dev/null; then
 	echo "CRITICAL: Inactive resources present..."
 	exit $STATE_CRITICAL
     else
@@ -73,8 +106,8 @@ check_inactive() {
 }
 
 check_connection() {
-    if ! $CRM configure show > /dev/null; then
-	echo "CRITICAL: could not connect to CRM..."
+    if ! $PCS config > /dev/null; then
+	echo "CRITICAL: could not connect to Cluster"
 	exit $STATE_CRITICAL
     fi
 }
@@ -110,10 +143,18 @@ while test -n "$1"; do
 	    check_connection
 	    check_maintenance
 	    ;;
+        standby)
+	    check_connection
+	    check_standby
+	    ;;
 	move)
 	    check_connection
 	    check_move
 	    ;;
+	offline)
+	    check_connection
+	    check_offline
+	    ;;	
 	failed)
 	    check_connection
 	    check_failed
