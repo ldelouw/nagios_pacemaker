@@ -65,7 +65,7 @@ check_standby() {
 }
 
 check_move() {
-    if $PCS config show | $GREP 'cli-ban' > /dev/null; then
+    if $PCS config show | $GREP 'cli-ban|cli-prefer' > /dev/null; then
 	echo "WARNING: Manual move is active..."
 	exit $STATE_WARNING
     else
